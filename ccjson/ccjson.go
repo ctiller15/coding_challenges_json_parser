@@ -32,8 +32,11 @@ func ParseJson(fileName string) (bool, error) {
 		if s == '}' {
 			brace_count--
 		}
-		fmt.Println(s)
 	}
 
-	return true, nil
+	if brace_count == 0 {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("error, json not closed properly")
+	}
 }
