@@ -3,6 +3,9 @@ package ccjson
 import (
 	"fmt"
 	"os"
+	"slices"
+	"strconv"
+	"unicode"
 )
 
 func extractKey(ptr int, endptr int, data []rune) (string, int, error) {
@@ -20,6 +23,83 @@ func extractKey(ptr int, endptr int, data []rune) (string, int, error) {
 
 	// If it hits the end and does not return, error.
 	return string(builtKey), i, fmt.Errorf("invalid json, no key terminator")
+}
+
+func extractValueDigit(ptr int, endptr int, data []rune) (int, int, error) {
+	i := ptr
+	var builtKey []rune
+	var terminators = []rune{' ', ',', '}', '\n'}
+
+	for i < endptr {
+		if unicode.IsDigit(data[i]) {
+			builtKey = append(builtKey, data[i])
+		} else if slices.Contains(terminators, data[i]) {
+			fmt.Printf("%c\n", data[i])
+			num, err := strconv.Atoi(string(builtKey))
+
+			if err != nil {
+				return 0, i, fmt.Errorf("extractValueDigit: %v", err)
+			}
+
+			return num, i, nil
+		}
+
+		i++
+	}
+
+	return 0, i, fmt.Errorf("invalid value")
+}
+
+func extractValueNull(ptr int, endptr int, data []rune) (bool, int, error) {
+	i := ptr
+	var builtValue []rune
+
+	characters := []rune{'n', 'u', 'l'}
+	nullSlice := []rune{'n', 'u', 'l', 'l'}
+
+	for i < endptr {
+		if !slices.Contains(characters, data[i]) {
+			return false, i, fmt.Errorf("invalid value, must be null")
+		}
+
+		builtValue = append(builtValue, data[i])
+		if slices.Compare(builtValue, nullSlice) == 0 {
+			return true, i, nil
+		}
+
+		i++
+	}
+
+	return false, i, fmt.Errorf("invalid value")
+}
+
+func extractValueBool(ptr int, endptr int, data []rune) (bool, int, error) {
+	i := ptr
+	var builtValue []rune
+
+	characters := []rune{'t', 'r', 'u', 'e', 'f', 'a', 'l', 's'}
+	trueSlice := []rune{'t', 'r', 'u', 'e'}
+	falseSlice := []rune{'f', 'a', 'l', 's', 'e'}
+
+	for i < endptr {
+
+		if !slices.Contains(characters, data[i]) {
+			return false, i, fmt.Errorf("invalid value, must be true or false")
+		}
+
+		builtValue = append(builtValue, data[i])
+		if slices.Compare(builtValue, trueSlice) == 0 {
+			return true, i, nil
+		}
+
+		if slices.Compare(builtValue, falseSlice) == 0 {
+			return false, i, nil
+		}
+
+		i++
+	}
+
+	return false, i, fmt.Errorf("invalid value")
 }
 
 // Start by extracting just string values. We can handle more complex json
@@ -45,30 +125,80 @@ func parseObject(ptr int, endptr int, data []rune) (map[string]interface{}, int,
 	result := map[string]interface{}{}
 
 	i := ptr
+
 	var key string
-	var val string
+	var val interface{}
+	var commaActive bool
+	var pairCount int
+	var val_is_nil bool
 
 	for i < endptr {
+		if data[i] == ',' {
+			commaActive = true
+		}
 
-		if len(key) > 0 && len(val) > 0 {
+		if len(key) > 0 && val != nil {
 			result[key] = val
 			key = ""
-			val = ""
+			val = nil
+			pairCount++
+		} else if len(key) > 0 && val_is_nil {
+			result[key] = nil
+			key = ""
+			val = nil
+			pairCount++
+			val_is_nil = false
 		}
 
 		// Can likely be extracted into a parseline func.
-		if len(key) > 0 && data[i] == '"' {
-			new_val, pos, err := extractValue(i+1, endptr, data)
+		if len(key) > 0 {
+			if data[i] == '"' {
+				new_val, pos, err := extractValue(i+1, endptr, data)
 
-			if err != nil {
-				return result, i, fmt.Errorf("error: parseObject: %v", err)
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject: %v", err)
+				}
+
+				val = new_val
+				i = pos
+			} else if data[i] == 't' || data[i] == 'f' {
+				new_val, pos, err := extractValueBool(i, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject: %v", err)
+				}
+
+				val = new_val
+				i = pos
+			} else if data[i] == 'n' {
+				is_nil, pos, err := extractValueNull(i, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject: %v", err)
+				}
+
+				val_is_nil = is_nil
+
+				i = pos
+			} else if unicode.IsDigit(data[i]) {
+				digit, pos, err := extractValueDigit(i, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject: %v", err)
+				}
+
+				val = digit
+				i = pos
 			}
+		}
 
-			val = new_val
-			i = pos
+		if len(key) == 0 && unicode.IsLetter(data[i]) {
+			return result, i, fmt.Errorf("property keys must be doublequoted")
 		}
 
 		if len(key) == 0 && data[i] == '"' {
+			// Starting new key value pair
+			commaActive = false
 			new_key, pos, err := extractKey(i+1, endptr, data)
 
 			if err != nil {
@@ -80,7 +210,11 @@ func parseObject(ptr int, endptr int, data []rune) (map[string]interface{}, int,
 		}
 
 		if data[i] == '}' {
-			return result, i, nil
+			if commaActive {
+				return result, i, fmt.Errorf("invalid json. trailing comma")
+			} else {
+				return result, i, nil
+			}
 		}
 
 		i++

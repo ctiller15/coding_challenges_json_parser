@@ -70,3 +70,53 @@ func Test_step2_valid_02(t *testing.T) {
 		t.Errorf("result does not match expected json.")
 	}
 }
+
+func Test_step2_invalid_01(t *testing.T) {
+	file_name := "./test_data/step2/invalid.json"
+	_, err := ccjson.ParseJson(file_name)
+
+	if err == nil {
+		t.Errorf("No error detected.")
+	}
+}
+
+func Test_step2_invalid_02(t *testing.T) {
+	file_name := "./test_data/step2/invalid2.json"
+	_, err := ccjson.ParseJson(file_name)
+
+	if err == nil {
+		t.Errorf("No error detected.")
+	}
+}
+
+func Test_step3_invalid(t *testing.T) {
+	file_name := "./test_data/step3/invalid.json"
+	_, err := ccjson.ParseJson(file_name)
+
+	if err == nil {
+		t.Errorf("No error detected.")
+	}
+}
+
+func Test_step_3_valid(t *testing.T) {
+	file_name := "./test_data/step3/valid.json"
+	result, err := ccjson.ParseJson(file_name)
+
+	if err != nil {
+		t.Errorf("error: %v", err)
+	}
+
+	expected := map[string]interface{}{
+		"key1": true,
+		"key2": false,
+		"key3": nil,
+		"key4": "value",
+		"key5": 101,
+	}
+
+	eq := reflect.DeepEqual(result, expected)
+
+	if !eq {
+		t.Errorf("result does not match expected json.")
+	}
+}
