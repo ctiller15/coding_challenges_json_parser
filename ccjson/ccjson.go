@@ -34,7 +34,6 @@ func extractValueDigit(ptr int, endptr int, data []rune) (int, int, error) {
 		if unicode.IsDigit(data[i]) {
 			builtKey = append(builtKey, data[i])
 		} else if slices.Contains(terminators, data[i]) {
-			fmt.Printf("%c\n", data[i])
 			num, err := strconv.Atoi(string(builtKey))
 
 			if err != nil {
@@ -121,6 +120,44 @@ func extractValue(ptr int, endptr int, data []rune) (string, int, error) {
 	return string(builtValue), i, fmt.Errorf("invalid json, no value terminator")
 }
 
+func parseArray(ptr int, endptr int, data []rune) ([]string, int, error) {
+	// Start with string arrays. Can get more complex later.
+	result := []string{}
+
+	i := ptr
+	var val string
+
+	for i < endptr {
+		if len(val) > 0 {
+			result = append(result, val)
+			val = ""
+		}
+
+		if len(val) == 0 {
+			if data[i] == '\'' {
+				return result, i, fmt.Errorf("invalid value")
+			} else if data[i] == '"' {
+				new_val, pos, err := extractValue(i+1, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("parseArray: %v", err)
+				}
+
+				val = new_val
+				i = pos
+			}
+		}
+
+		if data[i] == ']' {
+			return result, i, nil
+		}
+
+		i++
+	}
+
+	return result, i, fmt.Errorf("invalid value")
+}
+
 func parseObject(ptr int, endptr int, data []rune) (map[string]interface{}, int, error) {
 	result := map[string]interface{}{}
 
@@ -189,7 +226,25 @@ func parseObject(ptr int, endptr int, data []rune) (map[string]interface{}, int,
 
 				val = digit
 				i = pos
+			} else if data[i] == '[' {
+				arr, pos, err := parseArray(i, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject %v", err)
+				}
+
+				val = arr
+				i = pos
+			} else if data[i] == '{' {
+				obj, pos, err := parseObject(i, endptr, data)
+
+				if err != nil {
+					return result, i, fmt.Errorf("error: parseObject %v", err)
+				}
+				val = obj
+				i = pos
 			}
+
 		}
 
 		if len(key) == 0 && unicode.IsLetter(data[i]) {
@@ -213,7 +268,7 @@ func parseObject(ptr int, endptr int, data []rune) (map[string]interface{}, int,
 			if commaActive {
 				return result, i, fmt.Errorf("invalid json. trailing comma")
 			} else {
-				return result, i, nil
+				return result, i + 1, nil
 			}
 		}
 
@@ -242,9 +297,7 @@ func ParseJson(fileName string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("json must begin with a curly brace \\'{\\'")
 	}
 
-	result, index, err := parseObject(pointer+1, endPointer, stringified_data)
-
-	fmt.Println(index)
+	result, _, err := parseObject(pointer+1, endPointer, stringified_data)
 
 	if err != nil {
 		return nil, fmt.Errorf("error: parsejson %v", err)

@@ -120,3 +120,58 @@ func Test_step_3_valid(t *testing.T) {
 		t.Errorf("result does not match expected json.")
 	}
 }
+
+func Test_step_4_invalid(t *testing.T) {
+	file_name := "./test_data/step4/invalid.json"
+	_, err := ccjson.ParseJson(file_name)
+
+	if err == nil {
+		t.Errorf("Expected error.")
+	}
+}
+
+func Test_step_4_valid(t *testing.T) {
+	file_name := "./test_data/step4/valid.json"
+	result, err := ccjson.ParseJson(file_name)
+
+	if err != nil {
+		t.Errorf("error: %v", err)
+	}
+
+	expected := map[string]interface{}{
+		"key":   "value",
+		"key-n": 101,
+		"key-o": map[string]interface{}{},
+		"key-l": []string{},
+	}
+
+	eq := reflect.DeepEqual(result, expected)
+
+	if !eq {
+		t.Errorf("result does not match expected json.")
+	}
+}
+
+func Test_step_4_valid2(t *testing.T) {
+	file_name := "./test_data/step4/valid2.json"
+	result, err := ccjson.ParseJson(file_name)
+
+	if err != nil {
+		t.Errorf("error: %v", err)
+	}
+
+	expected := map[string]interface{}{
+		"key":   "value",
+		"key-n": 101,
+		"key-o": map[string]interface{}{
+			"inner key": "inner value",
+		},
+		"key-l": []string{"list value"},
+	}
+
+	eq := reflect.DeepEqual(result, expected)
+
+	if !eq {
+		t.Errorf("result does not match expected json.")
+	}
+}
