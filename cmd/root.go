@@ -23,10 +23,19 @@ Oh also this was made for coding challenges.`,
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		input_file := args[0]
-		fmt.Println("Parsing file!")
-		fmt.Println(input_file)
 
-		ccjson.ParseJson(input_file)
+		result, err := ccjson.ParseJson(input_file)
+
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("{")
+		for k, v := range result {
+			fmt.Println(k, ": ", v)
+		}
+		fmt.Println("}")
+
 	},
 }
 
